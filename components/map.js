@@ -1,52 +1,61 @@
 "use client";
 
-import { SearchBox } from "@mapbox/search-js-react";
+import { useRef, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { useRef, useEffect, useState } from "react";
+
+// Dynamically import SearchBox so it only loads on client
+const SearchBox = dynamic(
+  () => import("@mapbox/search-js-react").then((mod) => mod.SearchBox),
+  { ssr: false }
+);
 
 export default function MapComponent() {
-  const mapRef = useRef();
-  const mapContainerRef = useRef();
+  const mapRef = useRef(null);
+  const mapContainerRef = useRef(null);
+  const [value, setValue] = useState("");
 
-  const accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+  const accessToken =
+    "pk.eyJ1IjoiY3N2YWlzaGFraCIsImEiOiJjbWZ1d3N2eWUwMWRqMmtvaHJubjAyMWplIn0.OptwfofY9zECXVIM65bcIQ";
 
   useEffect(() => {
+    if (!mapContainerRef.current) return;
+
     mapboxgl.accessToken = accessToken;
-    const map = new mapboxgl.Map({
+    mapRef.current = new mapboxgl.Map({
       container: mapContainerRef.current,
-      style: "mapbox://styles/mapbox/streets-v11",
       center: [-74.0242, 40.6941],
       zoom: 10.12,
     });
 
-    mapRef.current = map;
-
     return () => {
-      map.remove();
+      mapRef.current?.remove();
     };
-  }, [accessToken]);
+  }, []);
+
+  const handleChange = (val) => setValue(val);
+
+  const handleRetrieve = (res) => {
+    if (res?.features?.[0]) {
+      const coords = res.features[0].geometry.coordinates;
+      mapRef.current?.flyTo({ center: coords, zoom: 14 });
+    }
+  };
 
   return (
-    <section className="w-screen h-screen relative">
-      {typeof window !== "undefined" && (
-        <div className="absolute top-4 left-4 z-10 w-80">
-          <SearchBox
-            accessToken={accessToken}
-            map={mapRef.current}
-            mapboxgl={mapboxgl}
-            marker={true}
-            placeholder="Search places"
-            onRetrieve={(res) => {
-              const coords = res?.result?.geometry?.coordinates;
-              if (coords) {
-                mapRef.current.flyTo({ center: coords, zoom: 14 });
-              }
-            }}
-          />
-        </div>
-      )}
-      <div id="map-container" ref={mapContainerRef} className="w-full h-full" />
+    <section className="relative w-screen h-screen bg-gray-100">
+      <div ref={mapContainerRef} className="w-full h-full" />
+      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 w-full max-w-md px-4">
+        <SearchBox
+          value={value}
+          onChange={handleChange}
+          accessToken={accessToken}
+          onRetrieve={handleRetrieve}
+          placeholder="Search for a location..."
+          className="w-full px-4 py-3 rounded-lg border border-gray-300 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
     </section>
   );
 }
